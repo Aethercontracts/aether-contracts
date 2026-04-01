@@ -23,8 +23,10 @@ The PLANNER decides WHAT to create. The WRITER uses these tools to DO it.
 """
 
 import os
+import json
 from pathlib import Path
 from datetime import datetime
+from typing import Dict, Any, List, Set
 
 
 # Maximum file size the engine will read (in bytes)
@@ -38,37 +40,58 @@ def _log(action: str, path: str) -> None:
     print(f"[FileSystem {ts}] {action}: {path}")
 
 
+def _error(code: str, message: str) -> str:
+    """Return a formalized JSON error envelope."""
+    return json.dumps({"status": "error", "error_code": code, "message": message})
+
+
+def _success(data: Any = None, message: str = "") -> str:
+    """Return a formalized JSON success envelope."""
+    payload: Dict[str, Any] = {"status": "success"}
+    if message:
+        payload["message"] = message
+    if data is not None:
+        payload["data"] = data
+    return json.dumps(payload)
+
+
 def read_file(path: str) -> str:
     """
-    Read a file and return its content as a string.
+    Read a file and return its content in a structured JSON envelope.
 
     Args:
         path: absolute or relative path to the file
 
     Returns:
-        File content as string, or an error message starting with "ERROR:"
+        JSON string containing the file content or explicit error.
     """
     try:
         p = Path(path).resolve()
 
         if not p.exists():
-            return f"ERROR: File not found: {path}"
+            return _error("FILE_NOT_FOUND", f"File not found: {path}")
 
         if not p.is_file():
-            return f"ERROR: Not a file: {path}"
+            return _error("NOT_A_FILE", f"Path exists but is not a file: {path}")
+            
+        if p.is_symlink() and not p.resolve().exists():
+            return _error("BROKEN_SYMLINK", f"Path is a broken symlink: {path}")
 
         size = p.stat().st_size
+        if size == 0:
+            return _success(data="", message="File is strictly empty (0 bytes).")
+            
         if size > MAX_READ_SIZE:
-            return f"ERROR: File too large ({size:,} bytes). Max is {MAX_READ_SIZE:,} bytes."
+            return _error("FILE_TOO_LARGE", f"File exceeds maximum read size of {MAX_READ_SIZE:,} bytes: {size:,} bytes")
 
         content = p.read_text(encoding="utf-8", errors="replace")
         _log("READ", str(p))
-        return content
+        return _success(data=content)
 
     except PermissionError:
-        return f"ERROR: Permission denied: {path}"
+        return _error("PERMISSION_DENIED", f"Permission denied accessing: {path}")
     except Exception as e:
-        return f"ERROR: {e}"
+        return _error("INTERNAL_ERROR", f"Failed to read file: {e}")
 
 
 def write_file(path: str, content: str) -> str:
@@ -84,23 +107,31 @@ def write_file(path: str, content: str) -> str:
         content: the complete file content
 
     Returns:
-        "OK: wrote N bytes to path" or "ERROR: description"
+        JSON string containing success message or error details.
     """
     try:
         p = Path(path).resolve()
 
-        # Create parent directories if they do not exist
+        # Edge case: Writing to a directory path
+        if p.exists() and p.is_dir():
+             return _error("IS_DIRECTORY", f"Cannot overwrite directory with file: {path}")
+
         p.parent.mkdir(parents=True, exist_ok=True)
 
-        p.write_text(content, encoding="utf-8")
         size = len(content.encode("utf-8"))
+        p.write_text(content, encoding="utf-8")
         _log("WRITE", f"{p} ({size:,} bytes)")
-        return f"OK: wrote {size:,} bytes to {p}"
+        
+        return _success(message=f"Wrote {size:,} bytes to {p}")
 
     except PermissionError:
-        return f"ERROR: Permission denied: {path}"
+        return _error("PERMISSION_DENIED", f"Permission denied writing to: {path}")
+    except OSError as e:
+        if "No space left" in str(e):
+             return _error("DISK_FULL", "No space left on device")
+        return _error("OS_ERROR", f"OS failure: {e}")
     except Exception as e:
-        return f"ERROR: {e}"
+        return _error("INTERNAL_ERROR", f"Failed to write file: {e}")
 
 
 def edit_file(path: str, old_text: str, new_text: str) -> str:
@@ -119,7 +150,7 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
         new_text: what to replace it with
 
     Returns:
-        "OK: edited path" or "ERROR: description"
+        JSON string indicating success or specific error details.
 
     Example:
         edit_file("auth.py", "return False  # TODO", "return check_token(token)")
@@ -128,30 +159,37 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
         p = Path(path).resolve()
 
         if not p.exists():
-            return f"ERROR: File not found: {path}"
+            return _error("FILE_NOT_FOUND", f"File to edit not found: {path}")
+            
+        if p.is_dir():
+            return _error("IS_DIRECTORY", f"Cannot edit a directory: {path}")
 
         current = p.read_text(encoding="utf-8")
 
         if old_text not in current:
-            return (
-                f"ERROR: Could not find the text to replace in {path}.\n"
-                f"Looking for: {repr(old_text[:100])}"
+            # Provide edge case context of what WAS found vs what was requested
+            return _error(
+                "TEXT_NOT_FOUND", 
+                f"Could not find exact text to replace. Target text length: {len(old_text)}"
             )
 
-        # Count occurrences — warn if there are multiple matches
+        # Count occurrences — strict edge case boundary if > 1
         count = current.count(old_text)
         if count > 1:
-            print(f"[FileSystem] WARNING: found {count} occurrences of the target text in {path}. Replacing first.")
+            return _error(
+                "AMBIGUOUS_MATCH", 
+                f"Found {count} occurrences of the target text. You must provide a more specific, unique block of text to replace."
+            )
 
-        updated = current.replace(old_text, new_text, 1)  # replace only first occurrence
+        updated = current.replace(old_text, new_text, 1)
         p.write_text(updated, encoding="utf-8")
         _log("EDIT", str(p))
-        return f"OK: edited {p}"
+        return _success(message=f"Edited file: {p}")
 
     except PermissionError:
-        return f"ERROR: Permission denied: {path}"
+        return _error("PERMISSION_DENIED", f"Permission denied editing: {path}")
     except Exception as e:
-        return f"ERROR: {e}"
+        return _error("INTERNAL_ERROR", f"Failed to edit file: {e}")
 
 
 def list_directory(path: str = ".", max_depth: int = 3) -> str:
@@ -166,7 +204,7 @@ def list_directory(path: str = ".", max_depth: int = 3) -> str:
         max_depth: how many levels deep to go (default: 3)
 
     Returns:
-        Formatted tree string, or "ERROR: description"
+        JSON string containing the tree structure, or error details.
 
     Example output:
         my_project/
@@ -181,29 +219,36 @@ def list_directory(path: str = ".", max_depth: int = 3) -> str:
         root = Path(path).resolve()
 
         if not root.exists():
-            return f"ERROR: Directory not found: {path}"
+            return _error("DIRECTORY_NOT_FOUND", f"Directory not found: {path}")
+            
+        if not root.is_dir():
+            return _error("NOT_A_DIRECTORY", f"Path exists but is not a directory: {path}")
 
-        lines = [f"{root.name}/"]
+        lines: List[str] = [f"{root.name}/"]
         _build_tree(root, lines, prefix="", depth=0, max_depth=max_depth)
-        return "\n".join(lines)
+        
+        return _success(data="\n".join(lines))
 
+    except PermissionError:
+        return _error("PERMISSION_DENIED", f"Permission denied listing directory: {path}")
     except Exception as e:
-        return f"ERROR: {e}"
+        return _error("INTERNAL_ERROR", f"Failed to list directory: {e}")
 
 
-def _build_tree(directory: Path, lines: list, prefix: str,
+def _build_tree(directory: Path, lines: List[str], prefix: str,
                 depth: int, max_depth: int) -> None:
     """Recursive helper for list_directory."""
     if depth >= max_depth:
         return
 
     # Skip hidden folders and common junk
-    skip = {"__pycache__", ".git", "node_modules", ".venv", "venv",
+    skip: Set[str] = {"__pycache__", ".git", "node_modules", ".venv", "venv",
             "epsilon-env", ".pytest_cache", "build", "dist"}
 
     try:
         entries = sorted(directory.iterdir(), key=lambda e: (e.is_file(), e.name))
     except PermissionError:
+        lines.append(f"{prefix}└── [Permission Denied]")
         return
 
     entries = [e for e in entries if e.name not in skip and not e.name.startswith(".")]

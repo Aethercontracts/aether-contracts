@@ -3,16 +3,18 @@ import sys
 import builtins
 import yaml
 import psutil
+from typing import Any, Dict
 
 # ── Redirect ALL print() calls to stderr ─────────────────────────────────────
 # stdout is reserved exclusively for JSON responses to VS Code.
 # Every component (bitnet_model, clara, orchestrator etc.) uses plain print().
 # This one override ensures none of those lines pollute the JSON output stream.
 _real_print = builtins.print
-def _stderr_print(*args, **kwargs):
+def _stderr_print(*args: Any, **kwargs: Any) -> None:
     kwargs.setdefault('file', sys.stderr)
     _real_print(*args, **kwargs)
 builtins.print = _stderr_print
+
 
 # Now import everything — their print() calls will go to stderr automatically
 sys.path.insert(0, '/home/lovekesh/epsilon')
@@ -33,17 +35,24 @@ def print_ram(label: str) -> None:
     log(f"  [{label}] RAM: {ram_mb:.0f} MB")
 
 
-def load_config() -> dict:
+def load_config() -> Dict[str, Any]:
     config_path = '/home/lovekesh/epsilon/config.yaml'
     try:
         with open(config_path) as f:
-            return yaml.safe_load(f)
+            cfg = yaml.safe_load(f)
+            if not isinstance(cfg, dict):
+                log(f"ERROR: config.yaml is empty or malformed at {config_path}")
+                sys.exit(1)
+            return cfg
     except FileNotFoundError:
         log(f"ERROR: config.yaml not found at {config_path}")
         sys.exit(1)
+    except yaml.YAMLError as e:
+        log(f"ERROR: config.yaml parse error: {e}")
+        sys.exit(1)
 
 
-def main():
+def main() -> None:
     config = load_config()
 
     log("=" * 45)
