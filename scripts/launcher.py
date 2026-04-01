@@ -85,7 +85,7 @@ def show_menu():
 def run_command(cmd_list, stream=True):
     """Runs a subprocess command and streams output realistically."""
     if stream:
-        process = subprocess.Popen(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        process = subprocess.Popen(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
         for line in process.stdout:
             sys.stdout.write(f"{DARK_GREEN}{line}{RESET}")
             sys.stdout.flush()
