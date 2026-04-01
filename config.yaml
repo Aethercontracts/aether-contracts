@@ -1,0 +1,71 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# AetherContracts — Unified Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# All inference parameters are FIXED for mathematical reproducibility.
+# Every run with the same input produces byte-identical output.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Paths (Docker) ────────────────────────────────────────────────────────────
+config_dir: /app
+memory_path: /data/conversation.json
+db_path: /data/clara.db
+project_dir: /app/aether-quantum-vault
+
+# ── LLM Server ────────────────────────────────────────────────────────────────
+llama_server_bin: /usr/local/bin/llama-server
+cpu_threads: 4
+idle_timeout: 600
+
+# ── Model Tiers ───────────────────────────────────────────────────────────────
+# Single tier — Qwen2.5-0.5B-Instruct is small enough to handle everything
+models:
+  fast:
+    path: /models/qwen2.5-0.5b-instruct-q5_k_m.gguf
+    description: "Qwen2.5-0.5B-Instruct (Q5_K_M) — 490MB, CPU-only"
+    context_len: 2048
+    gpu_layers: 0
+    max_tokens: 512
+    temperature: 0.0
+  balanced:
+    path: /models/qwen2.5-0.5b-instruct-q5_k_m.gguf
+    description: "Qwen2.5-0.5B-Instruct (Q5_K_M) — same model, higher context"
+    context_len: 4096
+    gpu_layers: 0
+    max_tokens: 1024
+    temperature: 0.0
+  deep:
+    path: /models/qwen2.5-0.5b-instruct-q5_k_m.gguf
+    description: "Qwen2.5-0.5B-Instruct (Q5_K_M) — same model, max context"
+    context_len: 4096
+    gpu_layers: 0
+    max_tokens: 2048
+    temperature: 0.0
+
+# ── Routing ───────────────────────────────────────────────────────────────────
+model_tier: fast
+routing:
+  fast_max: 10
+  balanced_max: 10
+  deep_min: 11
+
+# ── Determinism Parameters ────────────────────────────────────────────────────
+# These MUST stay constant for reproducible results
+determinism:
+  seed: 42
+  temperature: 0.0
+  top_k: 1
+  top_p: 1.0
+  repeat_penalty: 1.0
+  mirostat: 0
+
+# ── Server Ports ──────────────────────────────────────────────────────────────
+ports:
+  rust_api: 8080
+  llm_server: 8088
+  bridge_api: 8090
+  dashboard: 3000
+
+# ── Crawl ─────────────────────────────────────────────────────────────────────
+crawl_on_start: false

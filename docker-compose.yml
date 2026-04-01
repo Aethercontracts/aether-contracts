@@ -1,24 +1,24 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# AetherContracts — Docker Compose
+# AetherContracts — Docker Compose (MVP)
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # Services:
-#   aether-runtime   — Rust scoring engine + Python Epsilon + LLM inference
-#   dashboard         — Next.js 15 frontend
-#   ipfs              — IPFS node for proof anchoring
+#   aether-runtime   — Rust scoring engine + Fast API Bridge + Qwen 0.5B
+#   dashboard        — Next.js 15 frontend
+#   ipfs             — IPFS node for proof anchoring
 #
-# Usage:
-#   docker compose up                        # CPU mode
-#   docker compose --profile gpu up          # GPU mode (requires nvidia-container-toolkit)
+# Profiles:
+#   default — CPU only. Runs anywhere Docker is installed.
+#   gpu     — GPU accelerated. Requires nvidia-container-toolkit.
 #
-# Mount your GGUF model:
-#   docker compose up -e MODEL_PATH=/path/to/model.gguf
+# Simulation (Determinism Test):
+#   docker compose run simulator
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
 services:
   # ─────────────────────────────────────────────────────────────────────────
-  # Core Runtime: Rust + Python + LLM
+  # Core Runtime: Rust + Bridge + LLM
   # ─────────────────────────────────────────────────────────────────────────
   aether-runtime:
     build:
@@ -26,16 +26,30 @@ services:
       dockerfile: Dockerfile
     container_name: aether-runtime
     ports:
-      - "8080:8080"   # Epsilon API
-      - "8088:8088"   # LLM inference (llama.cpp)
+      - "8080:8080"   # Rust Scoring Engine
+      - "8088:8088"   # LLM Inference (llama.cpp)
+      - "8090:8090"   # Bridge API / Simulator
     volumes:
-      - ${MODEL_PATH:-./models}:/models:ro
       - aether-data:/data
       - ipfs-staging:/ipfs
     environment:
       - AETHER_ENV=production
-      - CUDA_VISIBLE_DEVICES=all
+      - AETHER_SEED=42
       - RUST_LOG=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # GPU Override Profile
+  aether-runtime-gpu:
+    extends: aether-runtime
+    container_name: aether-runtime-gpu
+    profiles: ["gpu"]
+    environment:
+      - CUDA_VISIBLE_DEVICES=all
     deploy:
       resources:
         reservations:
@@ -43,12 +57,23 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Simulation Harness (Runs one determinism test and exits)
+  # ─────────────────────────────────────────────────────────────────────────
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aether-simulator
+    profiles: ["test"]
+    depends_on:
+      aether-runtime:
+        condition: service_healthy
+    environment:
+      - AETHER_SEED=42
+    entrypoint: ["python3", "/app/scripts/simulate.py"]
+    command: ["--runs", "5", "--verbose", "--bridge-url", "http://aether-runtime:8090", "--rust-url", "http://aether-runtime:8080", "--llm-url", "http://aether-runtime:8088"]
 
   # ─────────────────────────────────────────────────────────────────────────
   # Dashboard: Next.js 15
@@ -61,7 +86,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://aether-runtime:8080
+      - NEXT_PUBLIC_API_URL=http://aether-runtime:8090
       - NEXT_PUBLIC_LLM_URL=http://aether-runtime:8088
     depends_on:
       aether-runtime:
