@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# AetherContracts — Docker Compose
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Services:
+#   aether-runtime   — Rust scoring engine + Python Epsilon + LLM inference
+#   dashboard         — Next.js 15 frontend
+#   ipfs              — IPFS node for proof anchoring
+#
+# Usage:
+#   docker compose up                        # CPU mode
+#   docker compose --profile gpu up          # GPU mode (requires nvidia-container-toolkit)
+#
+# Mount your GGUF model:
+#   docker compose up -e MODEL_PATH=/path/to/model.gguf
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Core Runtime: Rust + Python + LLM
+  # ─────────────────────────────────────────────────────────────────────────
+  aether-runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aether-runtime
+    ports:
+      - "8080:8080"   # Epsilon API
+      - "8088:8088"   # LLM inference (llama.cpp)
+    volumes:
+      - ${MODEL_PATH:-./models}:/models:ro
+      - aether-data:/data
+      - ipfs-staging:/ipfs
+    environment:
+      - AETHER_ENV=production
+      - CUDA_VISIBLE_DEVICES=all
+      - RUST_LOG=info
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Dashboard: Next.js 15
+  # ─────────────────────────────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: aether-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://aether-runtime:8080
+      - NEXT_PUBLIC_LLM_URL=http://aether-runtime:8088
+    depends_on:
+      aether-runtime:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # IPFS Node: Proof Anchoring
+  # ─────────────────────────────────────────────────────────────────────────
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: aether-ipfs
+    ports:
+      - "5001:5001"   # API
+      - "4001:4001"   # Swarm
+      - "8081:8080"   # Gateway
+    volumes:
+      - ipfs-data:/data/ipfs
+      - ipfs-staging:/export
+    environment:
+      - IPFS_PROFILE=server
+    restart: unless-stopped
+
+volumes:
+  aether-data:
+  ipfs-data:
+  ipfs-staging:

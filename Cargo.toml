@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = [
+    "aether-core/crates/aether-core",
+    "aether-core/crates/aether-lang",
+    "aether-core/crates/aegis-core",
+    "aether-quantum-vault",
+]
+
+# Exclude kernel (requires nightly) and CLIs
+exclude = [
+    "aether-core/crates/aether-kernel",
+    "aether-core/crates/aether-cli",
+    "aether-core/crates/aegis-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Teerth Sharma <seal>"]
+license = "MIT"
+repository = "https://github.com/teerthsharma/aether"
+
+[workspace.dependencies]
+# Shared math/core
+libm = "0.2"
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde_json = "1"
+nalgebra = { version = "0.32", default-features = false, features = ["libm"] }
+heapless = "0.8"
+
+# Crypto
+sha2 = "0.10"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# ID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# CLI (for aether-lang)
+clap = { version = "4.0", features = ["derive"] }
+rustyline = "14.0"
+
+# Kernel (referenced but excluded from build)
+bootloader = { version = "0.11", default-features = false }
+x86_64 = { version = "0.14", default-features = false, features = ["instructions", "abi_x86_interrupt"] }
+spin = { version = "0.9", default-features = false, features = ["mutex", "lazy", "spin_mutex"] }
+volatile = "0.5"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3

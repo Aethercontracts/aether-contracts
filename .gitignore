@@ -1,0 +1,38 @@
+# Locked leftover from migration
+epsilon-ide-master/
+
+# Build artifacts
+target/
+node_modules/
+dist/
+.next/
+out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IPFS local cache
+.ipfs/
+
+# Solana
+test-ledger/

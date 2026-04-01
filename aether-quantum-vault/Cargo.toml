@@ -1,0 +1,18 @@
+[package]
+name = "aether-quantum-vault"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Formally verified scoring engine and smart contracts for the creator economy"
+
+[dependencies]
+aether-core = { path = "../aether-core/crates/aether-core", default-features = false, features = ["std"] }
+serde = { workspace = true, features = ["derive", "alloc", "std"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+libm = { workspace = true }
+
+[dev-dependencies]
