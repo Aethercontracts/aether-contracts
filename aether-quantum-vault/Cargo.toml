@@ -15,4 +15,9 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 libm = { workspace = true }
 
+# Backend API server dependencies
+axum = "0.7"
+tokio = { version = "1.36", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors"] }
+
 [dev-dependencies]
