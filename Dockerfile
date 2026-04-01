@@ -29,13 +29,14 @@ RUN apt-get update && apt-get install -y \
 
 # Copy workspace manifests (dependency caching)
 COPY Cargo.toml ./
-COPY aether-core/Cargo.toml ./aether-core/
 COPY aether-core/crates/aether-core/Cargo.toml ./aether-core/crates/aether-core/
+COPY aether-core/crates/aether-lang/Cargo.toml ./aether-core/crates/aether-lang/
 COPY aether-core/crates/aegis-core/Cargo.toml ./aether-core/crates/aegis-core/
 COPY aether-quantum-vault/Cargo.toml ./aether-quantum-vault/
 
 # Stub sources for dependency caching
 RUN mkdir -p aether-core/crates/aether-core/src && echo "pub fn stub(){}" > aether-core/crates/aether-core/src/lib.rs && \
+    mkdir -p aether-core/crates/aether-lang/src && echo "pub fn stub(){}" > aether-core/crates/aether-lang/src/lib.rs && \
     mkdir -p aether-core/crates/aegis-core/src && echo "pub fn stub(){}" > aether-core/crates/aegis-core/src/lib.rs && \
     mkdir -p aether-quantum-vault/src && echo "pub fn stub(){}" > aether-quantum-vault/src/lib.rs && \
     echo 'fn main(){}' > aether-quantum-vault/src/main.rs
@@ -99,9 +100,7 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -r /app/requir
 
 # Copy Rust binaries
 COPY --from=rust-builder /build/target/release/aether-quantum-vault /usr/local/bin/aether-quantum-vault
-# Also try to copy the library
-RUN true
-COPY --from=rust-builder /build/target/release/libaether_quantum_vault.rlib /app/lib/ 2>/dev/null || true
+
 
 # Copy llama.cpp binaries
 COPY --from=llm-builder /usr/local/bin/llama-server /usr/local/bin/llama-server

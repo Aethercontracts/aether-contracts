@@ -25,9 +25,10 @@ impl OracleEngine {
     ///
     /// This creates a signed record that the escrow smart contract
     /// can verify to confirm the authenticity score is legitimate.
-    pub fn attest(&self, report: &AuditReport) -> AuthenticityAttestation {
+    pub fn attest(&self, report: &AuditReport) -> Result<AuthenticityAttestation, String> {
         // Hash the full audit report for the signature
-        let report_json = serde_json::to_string(report).unwrap_or_default();
+        let report_json = serde_json::to_string(report)
+            .map_err(|e| format!("Serialization error during attestation: {}", e))?;
         let mut hasher = Sha256::new();
         hasher.update(report_json.as_bytes());
         hasher.update(self.oracle_id.as_bytes());
@@ -96,7 +97,7 @@ mod tests {
             timestamp: 1000000,
         };
 
-        let attestation = oracle.attest(&report);
+        let attestation = oracle.attest(&report).unwrap();
 
         assert_eq!(attestation.score, 86); // 85.5 rounded
         assert_eq!(attestation.creator_id, "creator_123");

@@ -19,7 +19,7 @@ struct AppState {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the engine
     let state = Arc::new(AppState {
         authenticity_engine: Mutex::new(AuthenticityEngine::new()),
@@ -37,8 +37,19 @@ async fn main() {
     println!(" Listening on 0.0.0.0:8080");
     println!("════════════════════════════════════════════════════════");
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await
+        .map_err(|e| {
+            eprintln!("[ERROR] Failed to bind to 0.0.0.0:8080 - {}", e);
+            e
+        })?;
+    
+    axum::serve(listener, app).await
+        .map_err(|e| {
+            eprintln!("[ERROR] Failed to start Axum server - {}", e);
+            e
+        })?;
+
+    Ok(())
 }
 
 /// Simple health check

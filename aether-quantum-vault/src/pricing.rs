@@ -81,6 +81,15 @@ impl PricingEngine {
 
         // Compute Lyapunov energy: V = e²/2
         let energy = error * error / 2.0;
+
+        // Formal boundary check to counter numerical drift explosion
+        assert!(energy.is_finite(), "Mathematical fault: Lyapunov energy hit non-finite state");
+
+        if let Some(&prev_energy) = self.energy_history.last() {
+            // Formally test Lyapunov convergence
+            debug_assert!(energy <= prev_energy + 1e-6, "Lyapunov convergence breached: V(t+1) > V(t) + epsilon");
+        }
+
         self.energy_history.push(energy);
 
         // Create a SystemState representing the pricing deviation
@@ -120,6 +129,8 @@ impl PricingEngine {
         self.step_count += 1;
 
         // Track trajectory
+        assert!(self.current_price.is_finite(), "Mathematical fault: current_price hit non-finite state");
+
         if self.trajectory.len() < MAX_TRAJECTORY_HISTORY {
             self.trajectory.push(self.current_price);
         }

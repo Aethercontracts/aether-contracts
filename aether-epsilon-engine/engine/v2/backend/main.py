@@ -15,10 +15,12 @@ import sys
 import argparse
 import yaml
 import psutil
+from typing import Dict, Any, Tuple, Optional
+
 
 # ── Redirect print() to stderr to keep stdout clean for JSON ─────────────────
 _real_print = builtins.print
-def _stderr_print(*args, **kwargs):
+def _stderr_print(*args: Any, **kwargs: Any) -> None:
     kwargs.setdefault("file", sys.stderr)
     kwargs.setdefault("flush", True)
     _real_print(*args, **kwargs)
@@ -33,13 +35,13 @@ from backend.agents.orchestrator  import Orchestrator
 from backend.aether.link          import AetherLink
 
 
-def log(msg: str):
+def log(msg: str) -> None:
     _real_print(msg, file=sys.stderr, flush=True)
 
 def ram() -> float:
     return psutil.Process().memory_info().rss / (1024 ** 2)
 
-def load_config(path: str = "/mnt/d/epsilon/v2/config.yaml") -> dict:
+def load_config(path: str = "/mnt/d/epsilon/v2/config.yaml") -> Dict[str, Any]:
     try:
         with open(path) as f:
             cfg = yaml.safe_load(f)
@@ -55,7 +57,7 @@ def load_config(path: str = "/mnt/d/epsilon/v2/config.yaml") -> dict:
         sys.exit(1)
 
 
-async def boot(config: dict):
+async def boot(config: Dict[str, Any]) -> Tuple[Orchestrator, TieredModelManager, ConversationMemory]:
     log("=" * 52)
     log("  EPSILON IDE ENGINE v2.2")
     log("  Three-Tier Async Model Routing")
@@ -106,7 +108,7 @@ async def boot(config: dict):
     return orchestrator, model_manager, memory
 
 
-async def main_async():
+async def main_async() -> None:
     parser = argparse.ArgumentParser(description="Epsilon IDE Engine")
     parser.add_argument("--telegram", action="store_true",
                         help="Run Telegram bot interface")
@@ -157,7 +159,7 @@ async def main_async():
         log("Engine stopped cleanly.")
 
 
-def main():
+def main() -> None:
     try:
         asyncio.run(main_async())
     except KeyboardInterrupt:
