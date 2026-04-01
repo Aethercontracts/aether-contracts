@@ -34,7 +34,7 @@ impl OracleEngine {
         hasher.update(self.oracle_id.as_bytes());
         let signature = format!("{:x}", hasher.finalize());
 
-        AuthenticityAttestation {
+        Ok(AuthenticityAttestation {
             creator_id: report.creator.internal_id.clone(),
             score: report.overall_score.round() as u8,
             chebyshev_k: report.bot_report.chebyshev_k,
@@ -45,7 +45,7 @@ impl OracleEngine {
             cab_certificate_cid: None,
             attested_at: chrono::Utc::now().timestamp(),
             oracle_signature: signature,
-        }
+        })
     }
 
     /// Verify an attestation's signature integrity
